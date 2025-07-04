@@ -53,6 +53,7 @@ const Paciente_Interfaz: React.FC = () => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isRegisteringFace, setIsRegisteringFace] = useState(false);
+  const [cameraPurpose, setCameraPurpose] = useState<'profile' | 'facial_registration' | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -177,14 +178,8 @@ const Paciente_Interfaz: React.FC = () => {
   // --- Funciones de Cámara ---
   const startCameraGeneric = async (modalToShow: 'profile' | 'facial_registration') => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast.error("La cámara no es soportada por este navegador."); return; }
-    setCapturedImage(null); setCameraStream(null);
-    // FIX: Simplified logic to only handle the facial registration modal which is implemented.
-    if (modalToShow === 'facial_registration') {
-        setShowFacialRegistrationModal(true);
-    } else {
-        // NOTE: A modal for profile pictures is not implemented. Re-using the facial registration one.
-        setShowFacialRegistrationModal(true);
-    }
+    setCapturedImage(null); setCameraStream(null); setCameraPurpose(modalToShow);
+    setShowFacialRegistrationModal(true);
     try {
       const constraints = { video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } }, audio: false };
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -204,9 +199,10 @@ const Paciente_Interfaz: React.FC = () => {
     setCameraStream(null);
     setShowFacialRegistrationModal(false);
     setCapturedImage(null);
+    setCameraPurpose(null);
   }, [cameraStream]);
 
-  const capturePhoto = (actionAfterCapture: 'setProfilePic' | 'registerFace') => {
+  const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current; const canvas = canvasRef.current; const context = canvas.getContext('2d');
     if (!context) return;
@@ -215,9 +211,18 @@ const Paciente_Interfaz: React.FC = () => {
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     context.setTransform(1, 0, 0, 1, 0, 0);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    setCapturedImage(dataUrl);
-    if (actionAfterCapture === 'setProfilePic') stopCamera();
-    else if (actionAfterCapture === 'registerFace') handleFacialRegistrationSubmit(dataUrl);
+
+    if (cameraPurpose === 'profile') {
+        setCapturedImage(dataUrl);
+        // Manually close modal to preserve image data
+        if (cameraStream) { cameraStream.getTracks().forEach(track => track.stop()); }
+        setCameraStream(null);
+        setShowFacialRegistrationModal(false);
+        setCameraPurpose(null);
+    } else if (cameraPurpose === 'facial_registration') {
+        setCapturedImage(dataUrl); // Set image just in case, it will be cleared by stopCamera
+        handleFacialRegistrationSubmit(dataUrl);
+    }
   };
 
   useEffect(() => {
@@ -442,17 +447,17 @@ const Paciente_Interfaz: React.FC = () => {
                 <form onSubmit={handleFormSubmit} className="space-y-5">
                     <div><label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nombre completo*</label><input id="name" type="text" name="name" value={formData.name} onChange={handleFormChange} required className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400" placeholder="Ej: Ana García López"/></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div><label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Fecha de nacimiento</label><input id="date_of_birth" type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleFormChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400" max={new Date().toISOString().split("T")[0]}/></div>
+                        <div><label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Fecha de nacimiento</label><div className="relative"><input id="date_of_birth" type="text" onFocus={(e) => e.target.type='date'} onBlur={(e) => e.target.type='text'} name="date_of_birth" value={formData.date_of_birth} onChange={handleFormChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400" max={new Date().toISOString().split("T")[0]} placeholder="dd/mm/aaaa" /><CalendarIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" /></div></div>
                         <div><label htmlFor="gender" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Género</label><select id="gender" name="gender" value={formData.gender} onChange={handleFormChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400 appearance-none"><option value="">Seleccionar...</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option><option value="Otro">Otro</option><option value="Prefiero no decir">Prefiero no decir</option></select></div>
                     </div>
                     <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Teléfono</label><input id="phone" type="tel" name="phone" value={formData.phone} onChange={handleFormChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400" placeholder="Ej: 55 1234 5678"/></div>
-                    <div> <label htmlFor="blood_type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipo de sangre</label> <select id="blood_type" name="blood_type" value={formData.blood_type} onChange={handleFormChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400 appearance-none"> <option value="">Seleccionar...</option> <option value="A+">A+</option> <option value="A-">A-</option> <option value="AB+">AB+</option> <option value="AB-">AB-</option> <option value="B+">B+</option> <option value="B-">B-</option> <option value="O+">O+</option> <option value="O-">O-</option> <option value="Desconocido">No lo sé</option> </select> </div>
+                    <div> <label htmlFor="blood_type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Tipo de sangre</label> <select id="blood_type" name="blood_type" value={formData.blood_type} onChange={handleFormChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400 appearance-none"> <option value="">Seleccionar...</option> <option value="A+">A+</option> <option value="A-">A-</option> <option value="AB+">AB+</option> <option value="AB-">AB-</option> <option value="B+">B+</option> <option value="B-">B-</option> <option value="O+">O+</option> <option value="O-">O-</option>  </select> </div>
                     <div> <label htmlFor="allergies" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Alergias conocidas</label> <textarea id="allergies" name="allergies" value={formData.allergies} onChange={handleFormChange} rows={3} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:focus:ring-primary-400" placeholder="Ej: Penicilina, Cacahuetes, Polvo..." /> </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Foto de perfil (Opcional)</label>
                         <div className="mt-1 flex items-center space-x-4">
                             {capturedImage ? <img src={capturedImage} alt="Foto Capturada" className="h-20 w-20 rounded-full object-cover border-2 border-primary shadow-sm dark:border-primary-400" /> : <span className="inline-block h-20 w-20 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center border dark:border-gray-600"><User className="h-12 w-12 text-gray-300 dark:text-gray-400" /></span>}
-                            <button type="button" onClick={() => startCameraGeneric('profile')} className="ml-5 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 transition-colors"><Camera className="h-4 w-4 mr-1 inline" /> {capturedImage ? 'Tomar Otra' : 'Tomar Foto'}</button>
+                            <button type="button" onClick={() => startCameraGeneric('profile')} className="ml-5 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"><Camera className="h-4 w-4" /> {capturedImage ? 'Tomar Otra' : 'Tomar Foto'}</button>
                         </div>
                         {isUploadingPhoto && <div className="mt-2 flex items-center text-sm text-gray-500 dark:text-gray-400"><UploadCloud className="animate-pulse h-4 w-4 mr-1 text-primary dark:text-primary-400" /> Subiendo foto...</div>}
                     </div>
@@ -537,7 +542,7 @@ const Paciente_Interfaz: React.FC = () => {
         {showFacialRegistrationModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
                 <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto">
-                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2 text-center">Registro Facial</h3>
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2 text-center">{cameraPurpose === 'profile' ? 'Tomar Foto de Perfil' : 'Registro Facial'}</h3>
                     <p className="text-center text-sm text-gray-600 dark:text-gray-300 mb-4">Centra tu rostro en el óvalo.</p>
                     <div className="relative w-full aspect-[9/16] bg-gray-800 dark:bg-gray-900 rounded overflow-hidden mb-4 border border-gray-300 dark:border-gray-600">
                         <video ref={videoRef} playsInline autoPlay className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} ></video>
@@ -546,7 +551,7 @@ const Paciente_Interfaz: React.FC = () => {
                         {isRegisteringFace && ( <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-sm bg-black/70 z-10"> <Loader2 className="animate-spin h-8 w-8 mb-2 text-primary dark:text-primary-400" /> Registrando... </div> )}
                     </div>
                     <div className="flex justify-center space-x-4">
-                        <button type="button" onClick={() => capturePhoto('registerFace')} disabled={!cameraStream || isRegisteringFace} className={`inline-flex items-center justify-center px-5 py-2 border border-transparent rounded-full shadow-sm text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${isRegisteringFace ? 'bg-gray-500' : 'bg-primary hover:bg-primary/90 dark:bg-primary-600 dark:hover:bg-primary-700'}`}><Camera className="h-5 w-5" /></button>
+                        <button type="button" onClick={capturePhoto} disabled={!cameraStream || isRegisteringFace} className={`inline-flex items-center justify-center px-5 py-2 border border-transparent rounded-full shadow-sm text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${isRegisteringFace ? 'bg-gray-500' : 'bg-primary hover:bg-primary/90 dark:bg-primary-600 dark:hover:bg-primary-700'}`}><Camera className="h-5 w-5" /></button>
                         <button type="button" onClick={stopCamera} disabled={isRegisteringFace} className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"> Cancelar </button>
                     </div>
                 </div>
