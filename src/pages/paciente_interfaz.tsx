@@ -93,7 +93,6 @@ const Paciente_Interfaz: React.FC = () => {
 
            const processedAppointments = data?.map(appt => {
                const timeString = appt.horario_cita ? appt.horario_cita.split('T')[1]?.split('.')[0] || null : null;
-               // FIX: Supabase can return a one-to-many relation as an array. Access the first element.
                const doctorObject = Array.isArray(appt.doctor) ? appt.doctor[0] : appt.doctor;
                return {
                    ...appt,
@@ -198,9 +197,12 @@ const Paciente_Interfaz: React.FC = () => {
     if (cameraStream) { cameraStream.getTracks().forEach(track => track.stop()); }
     setCameraStream(null);
     setShowFacialRegistrationModal(false);
-    setCapturedImage(null);
+    // Don't clear the image when stopping the camera from the profile form
+    if (cameraPurpose !== 'profile') {
+        setCapturedImage(null);
+    }
     setCameraPurpose(null);
-  }, [cameraStream]);
+  }, [cameraStream, cameraPurpose]);
 
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -212,15 +214,15 @@ const Paciente_Interfaz: React.FC = () => {
     context.setTransform(1, 0, 0, 1, 0, 0);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
+    setCapturedImage(dataUrl);
+
     if (cameraPurpose === 'profile') {
-        setCapturedImage(dataUrl);
         // Manually close modal to preserve image data
         if (cameraStream) { cameraStream.getTracks().forEach(track => track.stop()); }
         setCameraStream(null);
         setShowFacialRegistrationModal(false);
         setCameraPurpose(null);
     } else if (cameraPurpose === 'facial_registration') {
-        setCapturedImage(dataUrl); // Set image just in case, it will be cleared by stopCamera
         handleFacialRegistrationSubmit(dataUrl);
     }
   };
@@ -439,8 +441,13 @@ const Paciente_Interfaz: React.FC = () => {
   if (error) {
     return <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-4 text-center dark:bg-red-900/30"><AlertTriangle className="h-12 w-12 text-red-500 mb-4 dark:text-red-400" /><h2 className="text-xl font-semibold text-red-700 mb-2 dark:text-red-300">Ocurrió un Error</h2><p className="text-red-600 mb-6 dark:text-red-400">{error}</p><button onClick={() => window.location.reload()} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-700 dark:hover:bg-red-800">Intentar de Nuevo</button></div>;
   }
-  if (showPatientForm) {
-    return (
+  
+  // ==================================================================
+  // ========= START: RESTRUCTURING THE RENDER LOGIC ==================
+  // ==================================================================
+  return (
+    <>
+      {showPatientForm ? (
         <div className="min-h-screen bg-gradient-to-br from-primary/5 via-white to-accent/5 p-4 dark:from-primary/10 dark:to-gray-800 flex items-center justify-center">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-lg w-full border border-gray-100 dark:border-gray-700">
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 text-center">Completa tu Perfil</h2>
@@ -465,101 +472,105 @@ const Paciente_Interfaz: React.FC = () => {
                 </form>
             </div>
         </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
-      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-30 border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
-              <div className="flex items-center gap-3"><img src="/logo.png" alt="Carelux Logo" className="h-10 w-auto"/></div>
-              <div className="flex items-center">
-                  <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2 h-[36px] rounded-full bg-[#ff362b34] hover:bg-[#ff362b52] transition-colors" aria-label="Cerrar Sesión"><span className="text-[#ff342b] text-sm font-medium tracking-wide">Cerrar sesión</span><svg className="w-5 h-5 text-[#ff342b]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12H3m0 0l4-4m-4 4l4 4m10 4h2a2 2 0 002-2V6a2 2 0 00-2-2h-2"/></svg></button>
-                  <button className="p-2 rounded-md text-gray-600 hover:text-primary hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary lg:hidden dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-primary-400" onClick={toggleMobileMenu} aria-label="Abrir menú"><Menu className="h-6 w-6" /></button>
+      ) : (
+        <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
+          <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-30 border-b border-gray-200 dark:border-gray-700">
+              <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+                  <div className="flex items-center gap-3"><img src="/logo.png" alt="Carelux Logo" className="h-10 w-auto"/></div>
+                  <div className="flex items-center">
+                      <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2 h-[36px] rounded-full bg-[#ff362b34] hover:bg-[#ff362b52] transition-colors" aria-label="Cerrar Sesión"><span className="text-[#ff342b] text-sm font-medium tracking-wide">Cerrar sesión</span><svg className="w-5 h-5 text-[#ff342b]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12H3m0 0l4-4m-4 4l4 4m10 4h2a2 2 0 002-2V6a2 2 0 00-2-2h-2"/></svg></button>
+                      <button className="p-2 rounded-md text-gray-600 hover:text-primary hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary lg:hidden dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-primary-400" onClick={toggleMobileMenu} aria-label="Abrir menú"><Menu className="h-6 w-6" /></button>
+                  </div>
               </div>
-          </div>
-      </header>
-      <main className="flex-1 pt-6 pb-24 lg:pb-8">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
-             <aside className="lg:col-span-3 xl:col-span-2 hidden lg:block">
-                <div className="sticky top-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-1.5">{[{ view: 'home', label: 'Inicio', icon: Home }, { view: 'appointments', label: 'Calendario', icon: CalendarIcon }, { view: 'medications', label: 'Recetas', icon: FileText }, { view: 'EREBUS', label: 'EREBUS', icon: FileText }, { view: 'pharmacies', label: 'Farmacias', icon: Package2 }, { view: 'profile', label: 'Perfil', icon: User }].map(item => (<button key={item.view} className={`w-full flex items-center space-x-3 p-3 text-sm rounded-lg transition-colors duration-150 ${currentView === item.view ? 'bg-primary/10 text-primary font-semibold dark:bg-primary-700/30 dark:text-primary-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'}`} onClick={() => handleViewChange(item.view)}><item.icon className="h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white" /><span>{item.label}</span></button>))}</div>
-            </aside>
-            {mobileMenuOpen && ( <> <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden" onClick={toggleMobileMenu} aria-hidden="true"></div><div className="fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl z-40 lg:hidden flex flex-col"><div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between"><div className="flex items-center gap-2"><img src="/logo.png" alt="Logo" className="h-8 w-auto"/><span className="text-lg font-semibold text-gray-800 dark:text-white">Menú</span></div><button className="p-2 -mr-2 rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700" onClick={toggleMobileMenu} aria-label="Cerrar menú"><X className="h-6 w-6" /></button></div><nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">{[{ view: 'home', label: 'Inicio', icon: Home }, { view: 'appointments', label: 'Calendario', icon: CalendarIcon }, { view: 'medications', label: 'Recetas', icon: FileText }, { view: 'EREBUS', label: 'EREBUS', icon: FileText }, { view: 'pharmacies', label: 'Farmacias', icon: Package2 }, { view: 'profile', label: 'Perfil', icon: User }].map(item => (<button key={item.view} className={`w-full flex items-center space-x-3 p-3 text-sm rounded-lg transition-colors duration-150 ${currentView === item.view ? 'bg-primary/10 text-primary font-semibold dark:bg-primary-700/30 dark:text-primary-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'}`} onClick={() => handleViewChange(item.view)}><item.icon className="h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white" /><span>{item.label}</span></button>))}</nav></div></>)}
-            <div className="lg:hidden"><FloatingRadialNav currentView={currentView} onChange={handleViewChange}/></div>
-            <div className="lg:col-span-9 xl:col-span-10 space-y-6">
-              {currentView === 'home' && (
-                  <>
-                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    <div className="bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-lg p-5 text-white"><div className="flex justify-between items-start mb-3"><div><p className="text-sm font-medium opacity-90">Hola de nuevo,</p><h2 className="text-2xl font-bold truncate dark:text-white"> {patientData?.name ?? 'Paciente'} </h2><p className="text-xs opacity-80 mt-1 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p></div><div className="flex-shrink-0 h-11 w-11 bg-white/20 rounded-full flex items-center justify-center ring-2 ring-white/30"><Sunrise className="h-6 w-6" /></div></div><p className="text-xs opacity-90 mt-2">¡Que tengas un excelente día!</p></div>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 cursor-pointer hover:shadow-md transition-shadow group" onClick={() => handleViewChange('appointments')} role="button" tabIndex={0} aria-label="Ver próxima cita"><div className="flex justify-between items-start mb-3"><div><p className="text-sm text-gray-500 dark:text-gray-400">Próxima Cita</p><h2 className="text-xl font-bold text-gray-800 dark:text-white">{appointments.length > 0 ? formatDate(appointments[0].appointment_date) : 'No hay citas'}</h2><p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">Ver detalles en Calendario</p></div><div className="flex-shrink-0 h-11 w-11 bg-gradient-to-br from-accent/80 to-accent rounded-full flex items-center justify-center shadow transition-transform duration-300 group-hover:scale-110"><CalendarIcon className="h-5 w-5 text-white" /></div></div><span className="text-sm font-medium text-primary dark:text-primary-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalles</span></div>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5"><div className="flex justify-between items-start mb-3"><div><p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{weatherData.day}</p><h2 className="text-xl font-bold text-gray-800 dark:text-white">{loadingWeather ? '...' : (weatherData.temp !== null ? `${weatherData.temp}°C` : '--')}</h2><p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{weatherData.condition} • {weatherData.location}</p></div><div className={`flex-shrink-0 h-11 w-11 rounded-full flex items-center justify-center shadow ${loadingWeather ? 'bg-gray-400 animate-pulse dark:bg-gray-700' : 'bg-gradient-to-br from-blue-400 to-cyan-400'}`}>{weatherData.icon}</div></div><p className="text-xs text-gray-500 dark:text-gray-400">Clima actual en tu zona.</p></div>
-                  </div>
-                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center"><h3 className="text-lg font-semibold text-gray-800 dark:text-white">Citas Próximas</h3><button className="text-sm font-medium text-primary hover:text-primary/80 focus:outline-none dark:text-primary-400 dark:hover:text-primary-300" onClick={() => handleViewChange('appointments')}> Ver todas </button></div>
-                    {loadingAppointments ? (<div className="h-40 flex items-center justify-center text-gray-500 dark:text-gray-400"><Loader2 className="animate-spin h-5 w-5 mr-3" /> Cargando citas...</div>
-                    ) : appointments.length > 0 ? (
-                        <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"><thead className="bg-gray-50 dark:bg-gray-700/50"><tr><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Fecha</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Hora</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Doctor</th></tr></thead><tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">{appointments.slice(0, 4).map((appt) => (<tr key={appt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800 dark:text-white">{formatDate(appt.appointment_date)}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{formatTime(appt.appointment_time)}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{appt.doctor_name || 'No asignado'}</td></tr>))}</tbody></table></div>
-                    ) : (
-                        <div className="h-40 flex flex-col items-center justify-center text-center px-6 py-4"><CalendarIcon className="h-10 w-10 text-gray-400 dark:text-gray-500 mb-3" /><p className="text-sm text-gray-500 dark:text-gray-400">No tienes citas programadas próximamente.</p><button onClick={() => handleViewChange('appointments')} className="mt-3 text-sm font-medium text-primary hover:underline dark:text-primary-400"> Agendar una cita </button></div>
-                    )}
-                   </div>
-                  </>
-              )}
-              {currentView !== 'home' && currentView !== 'profile' && (<ContentPanel view={currentView as any} patientId={patientData?.id} onClose={() => handleViewChange('home')} />)}
-              {currentView === 'profile' && patientData && (
-                <div className="space-y-6">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 md:p-6"><div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">Código de Identificación</h3><p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Usa este código para identificarte rápidamente.</p><p className="text-2xl font-bold text-primary font-mono tracking-widest bg-gray-100 px-4 py-2 rounded-md inline-block break-all dark:bg-gray-700 dark:text-primary-400">{patientData?.surecode || loyaltyCode || 'No Generado'}</p></div><div className="flex flex-col sm:flex-row md:flex-col gap-3 mt-2 md:mt-0 flex-shrink-0">{(patientData?.surecode || loyaltyCode) ? (<button onClick={() => setShowBarcode((prev) => !prev)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 text-sm font-medium dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"><QrCode className="h-4 w-4" /><span>{showBarcode ? 'Ocultar Barras' : 'Mostrar Barras'}</span></button>) : (<button onClick={generateLoyaltyCode} disabled={isGeneratingCode} className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 text-sm font-medium shadow disabled:opacity-70 disabled:cursor-not-allowed dark:bg-primary-600 dark:hover:bg-primary-600">{isGeneratingCode ? ( <> <Loader2 className="animate-spin h-4 w-4" /> <span>Generando...</span> </> ) : ( <> <QrCode className="h-4 w-4" /> <span>Generar Código</span> </>)}</button>)}</div></div>
-                      {(patientData?.surecode || loyaltyCode) && (
-                          <div className="mt-6 border-t pt-6 border-gray-200 dark:border-gray-700">
-                              <h4 className="text-md font-semibold text-gray-700 dark:text-white mb-3">Reconocimiento Facial</h4>
-                              {isLoadingRegistrationStatus ? (<div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4"><Loader2 className="animate-spin h-4 w-4 text-primary dark:text-primary-400" /> Verificando estado...</div>
-                              ) : hasFacialRegistration ? (
-                                  <div className="flex items-center gap-2 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-md text-green-700 dark:text-green-300 mb-4">
-                                      <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" /><p className="text-sm">¡Ya tienes un registro facial creado!</p>
-                                      <button onClick={() => startCameraGeneric('facial_registration')} className="ml-auto inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-600 hover:bg-blue-200 rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800" title="Intentar registrar de nuevo"><Camera className="h-4 w-4" /> Reintentar</button>
-                                  </div>
-                              ) : (
-                                  <><p className="text-sm text-gray-600 dark:text-gray-300 mb-4">Aún no tienes un registro facial. Regístrate para usar esta función.</p><button onClick={() => startCameraGeneric('facial_registration')} disabled={isRegisteringFace} className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 text-sm font-medium shadow disabled:opacity-70 disabled:cursor-not-allowed">{isRegisteringFace ? ( <> <Loader2 className="animate-spin h-4 w-4" /> <span>Registrando...</span> </> ) : ( <> <Camera className="h-4 w-4" /> <span>Hacer registro facial</span> </> )}</button></>
-                              )}
-                          </div>
-                      )}
-                      {(patientData?.surecode || loyaltyCode) && showBarcode && (<div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto max-w-md mx-auto flex justify-center"><Barcode value={patientData?.surecode || loyaltyCode} width={1.8} height={60} margin={10} displayValue={false} background="#f3f4f6" lineColor="#000000" /></div>)}
-                  </div>
-                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                     <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 sm:px-6 flex justify-between items-center"><h3 className="text-lg font-semibold text-gray-800 dark:text-white">Información Personal</h3></div>
-                     <div className="px-5 py-5 sm:px-6 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                         <div className="sm:col-span-1 flex flex-col items-center sm:items-start"><dt className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Foto de perfil</dt>{patientData?.Foto_paciente ? (<img src={patientData.Foto_paciente} alt="Foto de perfil" className="h-32 w-32 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700 shadow-sm" onError={(e) => { e.currentTarget.src = '/placeholder-user.png'; }} />) : (<div className="h-32 w-32 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center border dark:border-gray-600"><User className="h-16 w-16 text-gray-400 dark:text-gray-300" /></div>)}</div>
-                        <dl className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">{[{ label: 'Nombre completo', value: patientData?.name }, { label: 'Fecha de nacimiento', value: formatDate(patientData?.date_of_birth) }, { label: 'Correo electrónico', value: patientData?.email || user?.email }, { label: 'Teléfono', value: patientData?.phone }, { label: 'Género', value: patientData?.gender }, { label: 'Tipo de sangre', value: patientData?.blood_type }, { label: 'Alergias', value: patientData?.allergies },].map(item => { if (item.value && item.value !== 'Fecha inválida' && item.value !== 'No programada') { return (<div key={item.label} className={`${item.label === 'Alergias' || item.label === 'Correo electrónico' ? 'sm:col-span-2' : 'sm:col-span-1'}`}><dt className="text-sm font-medium text-gray-500 dark:text-gray-400">{item.label}</dt><dd className={`mt-1 text-sm text-gray-900 dark:text-white ${item.label === 'Alergias' ? 'whitespace-pre-wrap' : ''}`}>{item.value}</dd></div>); } else if (item.label === 'Nombre completo' || item.label === 'Correo electrónico') { return (<div key={item.label} className="sm:col-span-1"><dt className="text-sm font-medium text-gray-500 dark:text-gray-400">{item.label}</dt><dd className="mt-1 text-sm text-gray-500 dark:text-gray-400 italic">No disponible</dd></div>);} return null;})}</dl>
-                     </div>
-                  </div>
+          </header>
+          <main className="flex-1 pt-6 pb-24 lg:pb-8">
+            <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+                 <aside className="lg:col-span-3 xl:col-span-2 hidden lg:block">
+                    <div className="sticky top-20 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-1.5">{[{ view: 'home', label: 'Inicio', icon: Home }, { view: 'appointments', label: 'Calendario', icon: CalendarIcon }, { view: 'medications', label: 'Recetas', icon: FileText }, { view: 'EREBUS', label: 'EREBUS', icon: FileText }, { view: 'pharmacies', label: 'Farmacias', icon: Package2 }, { view: 'profile', label: 'Perfil', icon: User }].map(item => (<button key={item.view} className={`w-full flex items-center space-x-3 p-3 text-sm rounded-lg transition-colors duration-150 ${currentView === item.view ? 'bg-primary/10 text-primary font-semibold dark:bg-primary-700/30 dark:text-primary-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'}`} onClick={() => handleViewChange(item.view)}><item.icon className="h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white" /><span>{item.label}</span></button>))}</div>
+                </aside>
+                {mobileMenuOpen && ( <> <div className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm lg:hidden" onClick={toggleMobileMenu} aria-hidden="true"></div><div className="fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl z-40 lg:hidden flex flex-col"><div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between"><div className="flex items-center gap-2"><img src="/logo.png" alt="Logo" className="h-8 w-auto"/><span className="text-lg font-semibold text-gray-800 dark:text-white">Menú</span></div><button className="p-2 -mr-2 rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700" onClick={toggleMobileMenu} aria-label="Cerrar menú"><X className="h-6 w-6" /></button></div><nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">{[{ view: 'home', label: 'Inicio', icon: Home }, { view: 'appointments', label: 'Calendario', icon: CalendarIcon }, { view: 'medications', label: 'Recetas', icon: FileText }, { view: 'EREBUS', label: 'EREBUS', icon: FileText }, { view: 'pharmacies', label: 'Farmacias', icon: Package2 }, { view: 'profile', label: 'Perfil', icon: User }].map(item => (<button key={item.view} className={`w-full flex items-center space-x-3 p-3 text-sm rounded-lg transition-colors duration-150 ${currentView === item.view ? 'bg-primary/10 text-primary font-semibold dark:bg-primary-700/30 dark:text-primary-400' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'}`} onClick={() => handleViewChange(item.view)}><item.icon className="h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white" /><span>{item.label}</span></button>))}</nav></div></>)}
+                <div className="lg:hidden"><FloatingRadialNav currentView={currentView} onChange={handleViewChange}/></div>
+                <div className="lg:col-span-9 xl:col-span-10 space-y-6">
+                  {currentView === 'home' && (
+                      <>
+                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                        <div className="bg-gradient-to-br from-primary to-blue-600 rounded-xl shadow-lg p-5 text-white"><div className="flex justify-between items-start mb-3"><div><p className="text-sm font-medium opacity-90">Hola de nuevo,</p><h2 className="text-2xl font-bold truncate dark:text-white"> {patientData?.name ?? 'Paciente'} </h2><p className="text-xs opacity-80 mt-1 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" />{new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p></div><div className="flex-shrink-0 h-11 w-11 bg-white/20 rounded-full flex items-center justify-center ring-2 ring-white/30"><Sunrise className="h-6 w-6" /></div></div><p className="text-xs opacity-90 mt-2">¡Que tengas un excelente día!</p></div>
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 cursor-pointer hover:shadow-md transition-shadow group" onClick={() => handleViewChange('appointments')} role="button" tabIndex={0} aria-label="Ver próxima cita"><div className="flex justify-between items-start mb-3"><div><p className="text-sm text-gray-500 dark:text-gray-400">Próxima Cita</p><h2 className="text-xl font-bold text-gray-800 dark:text-white">{appointments.length > 0 ? formatDate(appointments[0].appointment_date) : 'No hay citas'}</h2><p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">Ver detalles en Calendario</p></div><div className="flex-shrink-0 h-11 w-11 bg-gradient-to-br from-accent/80 to-accent rounded-full flex items-center justify-center shadow transition-transform duration-300 group-hover:scale-110"><CalendarIcon className="h-5 w-5 text-white" /></div></div><span className="text-sm font-medium text-primary dark:text-primary-400 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalles</span></div>
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5"><div className="flex justify-between items-start mb-3"><div><p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{weatherData.day}</p><h2 className="text-xl font-bold text-gray-800 dark:text-white">{loadingWeather ? '...' : (weatherData.temp !== null ? `${weatherData.temp}°C` : '--')}</h2><p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">{weatherData.condition} • {weatherData.location}</p></div><div className={`flex-shrink-0 h-11 w-11 rounded-full flex items-center justify-center shadow ${loadingWeather ? 'bg-gray-400 animate-pulse dark:bg-gray-700' : 'bg-gradient-to-br from-blue-400 to-cyan-400'}`}>{weatherData.icon}</div></div><p className="text-xs text-gray-500 dark:text-gray-400">Clima actual en tu zona.</p></div>
+                      </div>
+                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center"><h3 className="text-lg font-semibold text-gray-800 dark:text-white">Citas Próximas</h3><button className="text-sm font-medium text-primary hover:text-primary/80 focus:outline-none dark:text-primary-400 dark:hover:text-primary-300" onClick={() => handleViewChange('appointments')}> Ver todas </button></div>
+                        {loadingAppointments ? (<div className="h-40 flex items-center justify-center text-gray-500 dark:text-gray-400"><Loader2 className="animate-spin h-5 w-5 mr-3" /> Cargando citas...</div>
+                        ) : appointments.length > 0 ? (
+                            <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700"><thead className="bg-gray-50 dark:bg-gray-700/50"><tr><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Fecha</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Hora</th><th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300">Doctor</th></tr></thead><tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">{appointments.slice(0, 4).map((appt) => (<tr key={appt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"><td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800 dark:text-white">{formatDate(appt.appointment_date)}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{formatTime(appt.appointment_time)}</td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{appt.doctor_name || 'No asignado'}</td></tr>))}</tbody></table></div>
+                        ) : (
+                            <div className="h-40 flex flex-col items-center justify-center text-center px-6 py-4"><CalendarIcon className="h-10 w-10 text-gray-400 dark:text-gray-500 mb-3" /><p className="text-sm text-gray-500 dark:text-gray-400">No tienes citas programadas próximamente.</p><button onClick={() => handleViewChange('appointments')} className="mt-3 text-sm font-medium text-primary hover:underline dark:text-primary-400"> Agendar una cita </button></div>
+                        )}
+                       </div>
+                      </>
+                  )}
+                  {currentView !== 'home' && currentView !== 'profile' && (<ContentPanel view={currentView as any} patientId={patientData?.id} onClose={() => handleViewChange('home')} />)}
+                  {currentView === 'profile' && patientData && (
+                    <div className="space-y-6">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 md:p-6"><div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">Código de Identificación</h3><p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Usa este código para identificarte rápidamente.</p><p className="text-2xl font-bold text-primary font-mono tracking-widest bg-gray-100 px-4 py-2 rounded-md inline-block break-all dark:bg-gray-700 dark:text-primary-400">{patientData?.surecode || loyaltyCode || 'No Generado'}</p></div><div className="flex flex-col sm:flex-row md:flex-col gap-3 mt-2 md:mt-0 flex-shrink-0">{(patientData?.surecode || loyaltyCode) ? (<button onClick={() => setShowBarcode((prev) => !prev)} className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 text-sm font-medium dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"><QrCode className="h-4 w-4" /><span>{showBarcode ? 'Ocultar Barras' : 'Mostrar Barras'}</span></button>) : (<button onClick={generateLoyaltyCode} disabled={isGeneratingCode} className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 text-sm font-medium shadow disabled:opacity-70 disabled:cursor-not-allowed dark:bg-primary-600 dark:hover:bg-primary-600">{isGeneratingCode ? ( <> <Loader2 className="animate-spin h-4 w-4" /> <span>Generando...</span> </> ) : ( <> <QrCode className="h-4 w-4" /> <span>Generar Código</span> </>)}</button>)}</div></div>
+                          {(patientData?.surecode || loyaltyCode) && (
+                              <div className="mt-6 border-t pt-6 border-gray-200 dark:border-gray-700">
+                                  <h4 className="text-md font-semibold text-gray-700 dark:text-white mb-3">Reconocimiento Facial</h4>
+                                  {isLoadingRegistrationStatus ? (<div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-4"><Loader2 className="animate-spin h-4 w-4 text-primary dark:text-primary-400" /> Verificando estado...</div>
+                                  ) : hasFacialRegistration ? (
+                                      <div className="flex items-center gap-2 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-md text-green-700 dark:text-green-300 mb-4">
+                                          <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" /><p className="text-sm">¡Ya tienes un registro facial creado!</p>
+                                          <button onClick={() => startCameraGeneric('facial_registration')} className="ml-auto inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-600 hover:bg-blue-200 rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800" title="Intentar registrar de nuevo"><Camera className="h-4 w-4" /> Reintentar</button>
+                                      </div>
+                                  ) : (
+                                      <><p className="text-sm text-gray-600 dark:text-gray-300 mb-4">Aún no tienes un registro facial. Regístrate para usar esta función.</p><button onClick={() => startCameraGeneric('facial_registration')} disabled={isRegisteringFace} className="flex items-center justify-center gap-2 px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 text-sm font-medium shadow disabled:opacity-70 disabled:cursor-not-allowed">{isRegisteringFace ? ( <> <Loader2 className="animate-spin h-4 w-4" /> <span>Registrando...</span> </> ) : ( <> <Camera className="h-4 w-4" /> <span>Hacer registro facial</span> </> )}</button></>
+                                  )}
+                              </div>
+                          )}
+                          {(patientData?.surecode || loyaltyCode) && showBarcode && (<div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-x-auto max-w-md mx-auto flex justify-center"><Barcode value={patientData?.surecode || loyaltyCode} width={1.8} height={60} margin={10} displayValue={false} background="#f3f4f6" lineColor="#000000" /></div>)}
+                      </div>
+                       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 sm:px-6 flex justify-between items-center"><h3 className="text-lg font-semibold text-gray-800 dark:text-white">Información Personal</h3></div>
+                         <div className="px-5 py-5 sm:px-6 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                             <div className="sm:col-span-1 flex flex-col items-center sm:items-start"><dt className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Foto de perfil</dt>{patientData?.Foto_paciente ? (<img src={patientData.Foto_paciente} alt="Foto de perfil" className="h-32 w-32 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700 shadow-sm" onError={(e) => { e.currentTarget.src = '/placeholder-user.png'; }} />) : (<div className="h-32 w-32 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center border dark:border-gray-600"><User className="h-16 w-16 text-gray-400 dark:text-gray-300" /></div>)}</div>
+                            <dl className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">{[{ label: 'Nombre completo', value: patientData?.name }, { label: 'Fecha de nacimiento', value: formatDate(patientData?.date_of_birth) }, { label: 'Correo electrónico', value: patientData?.email || user?.email }, { label: 'Teléfono', value: patientData?.phone }, { label: 'Género', value: patientData?.gender }, { label: 'Tipo de sangre', value: patientData?.blood_type }, { label: 'Alergias', value: patientData?.allergies },].map(item => { if (item.value && item.value !== 'Fecha inválida' && item.value !== 'No programada') { return (<div key={item.label} className={`${item.label === 'Alergias' || item.label === 'Correo electrónico' ? 'sm:col-span-2' : 'sm:col-span-1'}`}><dt className="text-sm font-medium text-gray-500 dark:text-gray-400">{item.label}</dt><dd className={`mt-1 text-sm text-gray-900 dark:text-white ${item.label === 'Alergias' ? 'whitespace-pre-wrap' : ''}`}>{item.value}</dd></div>); } else if (item.label === 'Nombre completo' || item.label === 'Correo electrónico') { return (<div key={item.label} className="sm:col-span-1"><dt className="text-sm font-medium text-gray-500 dark:text-gray-400">{item.label}</dt><dd className="mt-1 text-sm text-gray-500 dark:text-gray-400 italic">No disponible</dd></div>);} return null;})}</dl>
+                         </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          </main>
         </div>
-
-        {showFacialRegistrationModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4">
-                <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto">
-                    <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2 text-center">{cameraPurpose === 'profile' ? 'Tomar Foto de Perfil' : 'Registro Facial'}</h3>
-                    <p className="text-center text-sm text-gray-600 dark:text-gray-300 mb-4">Centra tu rostro en el óvalo.</p>
-                    <div className="relative w-full aspect-[9/16] bg-gray-800 dark:bg-gray-900 rounded overflow-hidden mb-4 border border-gray-300 dark:border-gray-600">
-                        <video ref={videoRef} playsInline autoPlay className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} ></video>
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="border-2 border-white border-dashed rounded-full animate-ping" style={{ width: '75%', height: '70%' }}></div><div className="absolute border-2 border-white border-dashed rounded-full" style={{ width: '75%', height: '70%' }}></div></div>
-                        {!cameraStream && !isRegisteringFace && ( <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-300 text-sm bg-black/50"> Iniciando cámara... </div> )}
-                        {isRegisteringFace && ( <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-sm bg-black/70 z-10"> <Loader2 className="animate-spin h-8 w-8 mb-2 text-primary dark:text-primary-400" /> Registrando... </div> )}
-                    </div>
-                    <div className="flex justify-center space-x-4">
-                        <button type="button" onClick={capturePhoto} disabled={!cameraStream || isRegisteringFace} className={`inline-flex items-center justify-center px-5 py-2 border border-transparent rounded-full shadow-sm text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${isRegisteringFace ? 'bg-gray-500' : 'bg-primary hover:bg-primary/90 dark:bg-primary-600 dark:hover:bg-primary-700'}`}><Camera className="h-5 w-5" /></button>
-                        <button type="button" onClick={stopCamera} disabled={isRegisteringFace} className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"> Cancelar </button>
-                    </div>
+      )}
+      
+      {/* ================================================================== */}
+      {/* ======================= CAMERA MODAL (FIXED) ===================== */}
+      {/* ================================================================== */}
+      {showFacialRegistrationModal && (
+        // Added higher z-index (z-[9999]) and backdrop-blur for better visibility
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-75 p-4 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2 text-center">{cameraPurpose === 'profile' ? 'Tomar Foto de Perfil' : 'Registro Facial'}</h3>
+                <p className="text-center text-sm text-gray-600 dark:text-gray-300 mb-4">Centra tu rostro en el óvalo.</p>
+                <div className="relative w-full aspect-[9/16] bg-gray-800 dark:bg-gray-900 rounded overflow-hidden mb-4 border border-gray-300 dark:border-gray-600">
+                    {/* Added `muted` prop to video for better autoplay compatibility */}
+                    <video ref={videoRef} playsInline autoPlay muted className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} ></video>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="border-2 border-white border-dashed rounded-full animate-ping" style={{ width: '75%', height: '70%' }}></div><div className="absolute border-2 border-white border-dashed rounded-full" style={{ width: '75%', height: '70%' }}></div></div>
+                    {!cameraStream && !isRegisteringFace && ( <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-300 text-sm bg-black/50"> Iniciando cámara... </div> )}
+                    {isRegisteringFace && ( <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-sm bg-black/70 z-10"> <Loader2 className="animate-spin h-8 w-8 mb-2 text-primary dark:text-primary-400" /> Registrando... </div> )}
+                </div>
+                <div className="flex justify-center space-x-4">
+                    <button type="button" onClick={capturePhoto} disabled={!cameraStream || isRegisteringFace} className={`inline-flex items-center justify-center px-5 py-2 border border-transparent rounded-full shadow-sm text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${isRegisteringFace ? 'bg-gray-500' : 'bg-primary hover:bg-primary/90 dark:bg-primary-600 dark:hover:bg-primary-700'}`}><Camera className="h-5 w-5" /></button>
+                    <button type="button" onClick={stopCamera} disabled={isRegisteringFace} className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"> Cancelar </button>
                 </div>
             </div>
-        )}
-        <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
-      </main>
-    </div>
+        </div>
+      )}
+      <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
+    </>
   );
 };
 
