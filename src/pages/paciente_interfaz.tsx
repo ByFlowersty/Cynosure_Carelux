@@ -545,20 +545,20 @@ const Paciente_Interfaz: React.FC = () => {
           </main>
         </div>
       )}
-      
       {/* ================================================================== */}
       {/* ======================= CAMERA MODAL (FIXED) ===================== */}
       {/* ================================================================== */}
       {showFacialRegistrationModal && (
-        // Added higher z-index (z-[9999]) and backdrop-blur for better visibility
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-75 p-4 backdrop-blur-sm">
             <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto">
                 <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2 text-center">{cameraPurpose === 'profile' ? 'Tomar Foto de Perfil' : 'Registro Facial'}</h3>
                 <p className="text-center text-sm text-gray-600 dark:text-gray-300 mb-4">Centra tu rostro en el óvalo.</p>
                 <div className="relative w-full aspect-[9/16] bg-gray-800 dark:bg-gray-900 rounded overflow-hidden mb-4 border border-gray-300 dark:border-gray-600">
-                    {/* Added `muted` prop to video for better autoplay compatibility */}
-                    <video ref={videoRef} playsInline autoPlay muted className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} ></video>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="border-2 border-white border-dashed rounded-full animate-ping" style={{ width: '75%', height: '70%' }}></div><div className="absolute border-2 border-white border-dashed rounded-full" style={{ width: '75%', height: '70%' }}></div></div>
+                    {/* 👇 AQUÍ ESTÁ EL CAMBIO DE object-cover a object-contain 👇 */}
+                    <video ref={videoRef} playsInline autoPlay muted className="absolute inset-0 w-full h-full object-contain" style={{ transform: 'scaleX(-1)' }} ></video>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="border-2 border-white border-dashed rounded-full" style={{ width: '75%', height: '70%' }}></div>
+                    </div>
                     {!cameraStream && !isRegisteringFace && ( <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-300 text-sm bg-black/50"> Iniciando cámara... </div> )}
                     {isRegisteringFace && ( <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-sm bg-black/70 z-10"> <Loader2 className="animate-spin h-8 w-8 mb-2 text-primary dark:text-primary-400" /> Registrando... </div> )}
                 </div>
