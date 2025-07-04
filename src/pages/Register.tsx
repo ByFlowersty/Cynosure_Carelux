@@ -9,7 +9,7 @@ import {
 } from "../components/ui/card"; // Assuming this exists
 import {
   EyeIcon, EyeOffIcon, UserIcon, MailIcon, LockIcon, PhoneIcon, CalendarIcon,
-  DropletIcon, ShieldAlertIcon, Camera, X as XIcon, UploadCloud,
+  DropletIcon, ShieldAlertIcon, Camera, X as  UploadCloud,
 } from "lucide-react"; // Assuming lucide-react is installed
 import toast from 'react-hot-toast'; // Ensure react-hot-toast is installed (npm install react-hot-toast)
 
