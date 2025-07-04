@@ -197,7 +197,6 @@ const Paciente_Interfaz: React.FC = () => {
     if (cameraStream) { cameraStream.getTracks().forEach(track => track.stop()); }
     setCameraStream(null);
     setShowFacialRegistrationModal(false);
-    // Don't clear the image when stopping the camera from the profile form
     if (cameraPurpose !== 'profile') {
         setCapturedImage(null);
     }
@@ -217,7 +216,6 @@ const Paciente_Interfaz: React.FC = () => {
     setCapturedImage(dataUrl);
 
     if (cameraPurpose === 'profile') {
-        // Manually close modal to preserve image data
         if (cameraStream) { cameraStream.getTracks().forEach(track => track.stop()); }
         setCameraStream(null);
         setShowFacialRegistrationModal(false);
@@ -442,9 +440,6 @@ const Paciente_Interfaz: React.FC = () => {
     return <div className="min-h-screen flex flex-col items-center justify-center bg-red-50 p-4 text-center dark:bg-red-900/30"><AlertTriangle className="h-12 w-12 text-red-500 mb-4 dark:text-red-400" /><h2 className="text-xl font-semibold text-red-700 mb-2 dark:text-red-300">Ocurrió un Error</h2><p className="text-red-600 mb-6 dark:text-red-400">{error}</p><button onClick={() => window.location.reload()} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-700 dark:hover:bg-red-800">Intentar de Nuevo</button></div>;
   }
   
-  // ==================================================================
-  // ========= START: RESTRUCTURING THE RENDER LOGIC ==================
-  // ==================================================================
   return (
     <>
       {showPatientForm ? (
@@ -545,30 +540,67 @@ const Paciente_Interfaz: React.FC = () => {
           </main>
         </div>
       )}
+      
       {/* ================================================================== */}
-      {/* ======================= CAMERA MODAL (FIXED) ===================== */}
+      {/* ======================= CAMERA MODAL (NEW) ===================== */}
       {/* ================================================================== */}
-      {showFacialRegistrationModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-75 p-4 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-sm w-full mx-auto">
-                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2 text-center">{cameraPurpose === 'profile' ? 'Tomar Foto de Perfil' : 'Registro Facial'}</h3>
-                <p className="text-center text-sm text-gray-600 dark:text-gray-300 mb-4">Centra tu rostro en el óvalo.</p>
-                <div className="relative w-full aspect-[9/16] bg-gray-800 dark:bg-gray-900 rounded overflow-hidden mb-4 border border-gray-300 dark:border-gray-600">
-                    {/* 👇 AQUÍ ESTÁ EL CAMBIO DE object-cover a object-contain 👇 */}
-                    <video ref={videoRef} playsInline autoPlay muted className="absolute inset-0 w-full h-full object-contain" style={{ transform: 'scaleX(-1)' }} ></video>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="border-2 border-white border-dashed rounded-full" style={{ width: '75%', height: '70%' }}></div>
-                    </div>
-                    {!cameraStream && !isRegisteringFace && ( <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-300 text-sm bg-black/50"> Iniciando cámara... </div> )}
-                    {isRegisteringFace && ( <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-sm bg-black/70 z-10"> <Loader2 className="animate-spin h-8 w-8 mb-2 text-primary dark:text-primary-400" /> Registrando... </div> )}
-                </div>
-                <div className="flex justify-center space-x-4">
-                    <button type="button" onClick={capturePhoto} disabled={!cameraStream || isRegisteringFace} className={`inline-flex items-center justify-center px-5 py-2 border border-transparent rounded-full shadow-sm text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed ${isRegisteringFace ? 'bg-gray-500' : 'bg-primary hover:bg-primary/90 dark:bg-primary-600 dark:hover:bg-primary-700'}`}><Camera className="h-5 w-5" /></button>
-                    <button type="button" onClick={stopCamera} disabled={isRegisteringFace} className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"> Cancelar </button>
-                </div>
-            </div>
-        </div>
-      )}
+       {showFacialRegistrationModal && (
+           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-75 p-4 backdrop-blur-sm">
+               <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-xl max-w-sm w-full mx-auto border border-gray-200 dark:border-gray-700">
+                   <h3 className="text-lg font-semibold leading-6 text-gray-900 dark:text-white mb-2 text-center">
+                      {cameraPurpose === 'profile' ? 'Tomar Foto de Perfil' : 'Registro Facial'}
+                   </h3>
+                   <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-4">Centra tu rostro en el óvalo.</p>
+                   
+                   <div className="relative w-full aspect-[9/16] bg-gray-900 rounded-md overflow-hidden mb-5 border border-gray-300 dark:border-gray-600">
+                       <video
+                           ref={videoRef}
+                           playsInline autoPlay muted
+                           className="absolute inset-0 w-full h-full object-cover"
+                           style={{ transform: 'scaleX(-1)' }}
+                       ></video>
+                       
+                       {/* --- OVALO Y ESTADOS DE CARGA --- */}
+                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                           <div className="absolute border-2 border-white/70 border-dashed rounded-full" style={{ width: '75%', height: '70%' }}></div>
+                       </div>
+                       
+                       {!cameraStream && !isRegisteringFace && (
+                           <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm font-medium bg-gray-800/50">
+                               Iniciando cámara...
+                           </div>
+                       )}
+
+                       {isRegisteringFace && (
+                           <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-sm bg-black/70 z-10">
+                               <Loader2 className="animate-spin h-8 w-8 mb-2 text-primary dark:text-primary-400" />
+                               Registrando...
+                           </div>
+                       )}
+                   </div>
+
+                   <div className="flex justify-center space-x-4">
+                       <button
+                           type="button"
+                           onClick={capturePhoto}
+                           disabled={!cameraStream || isRegisteringFace}
+                           className="inline-flex items-center justify-center px-5 py-2.5 border border-transparent rounded-full shadow-sm text-base font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:bg-primary-600 dark:hover:bg-primary-700"
+                           aria-label="Capturar Foto"
+                       >
+                           <Camera className="h-5 w-5" />
+                       </button>
+                       <button
+                           type="button"
+                           onClick={stopCamera}
+                           disabled={isRegisteringFace}
+                           className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                           Cancelar
+                       </button>
+                   </div>
+               </div>
+           </div>
+       )}
       <canvas ref={canvasRef} style={{ display: 'none' }}></canvas>
     </>
   );
