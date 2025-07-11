@@ -9,7 +9,7 @@ export default function terminos() {
           Bienvenido a Carelux Point. Al utilizar nuestro sitio web, aceptas los siguientes términos y condiciones...
         </p>
         <p className="text-gray-700 text-base leading-relaxed mb-4">
-          [Aquí puedes agregar el contenido completo de tus términos.]
+          ....
         </p>
         <p className="text-gray-500 text-sm mt-8">
           Última actualización: {new Date().toLocaleDateString()}
