@@ -330,7 +330,7 @@ export default function LandingPage() {
                        <ArrowRight className="ml-2 h-5 w-5" />
                     </button>
                   </a>
-                  <a href="#interfaces">
+                  <a href="/login">
                      <button
                          className={`${btnSecondary} text-base px-8 py-3.5 w-full sm:w-auto`}
                          style={secondaryBtnStyle}
