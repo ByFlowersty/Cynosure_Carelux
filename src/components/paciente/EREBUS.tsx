@@ -1,6 +1,6 @@
 // src/components/paciente/EREBUS.tsx // Asumiendo ubicación dentro de paciente
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, Square, Loader2, AlertCircle, Volume2, Play, Pause, BrainCircuit } from 'lucide-react'; // Iconos relevantes
+import { Mic, Square, Loader2, AlertCircle, Play, Pause, BrainCircuit } from 'lucide-react'; // Iconos relevantes
 
 // Interfaz para la respuesta esperada de la API
 interface ApiResponse {
