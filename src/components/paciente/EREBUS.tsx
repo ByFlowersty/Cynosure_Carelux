@@ -1,358 +1,220 @@
-// src/components/paciente/EREBUS.tsx // Asumiendo ubicación dentro de paciente
-import  { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, Square, Loader2, AlertCircle,  Play, Pause, BrainCircuit } from 'lucide-react'; // Iconos relevantes
+import React, { useState, useRef, useEffect } from 'react';
+import imageCompression from 'browser-image-compression';
 
-// Interfaz para la respuesta esperada de la API
-interface ApiResponse {
-  responseText: string;
-  audioBase64: string | null;
-}
+// --- Iconos ---
+const CameraIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
+const UploadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>;
+const AnalyzeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
+const CaptureIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
 
-// Componente EREBUS
-function EREBUS() {
-  // --- Estados ---
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isPlayingResponse, setIsPlayingResponse] = useState<boolean>(false); // Estado para controlar si el audio de respuesta está sonando
-  const [responseText, setResponseText] = useState<string>('');
+// --- COMPONENTE RASTREADOR DE PROGRESO ---
+const ProgressTracker = ({ steps, currentStep }: { steps: string[], currentStep: number }) => (
+  <div className="w-full my-4">
+    <ol className="flex items-center w-full">
+      {steps.map((step, index) => {
+        const stepIndex = index + 1;
+        const isCompleted = currentStep > stepIndex;
+        const isCurrent = currentStep === stepIndex;
+        return (
+          <li key={step} className={`flex w-full items-center ${stepIndex < steps.length ? "after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-300 after:inline-block" : ""}`}>
+            <span className={`flex items-center justify-center w-10 h-10 rounded-full shrink-0 transition-colors duration-300 ${isCompleted ? 'bg-blue-600 text-white' : isCurrent ? 'bg-blue-200 text-blue-800 animate-pulse' : 'bg-gray-200 text-gray-500'}`}>
+              {isCompleted ? <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path></svg> : <span className="font-bold">{stepIndex}</span>}
+            </span>
+            <span className={`ml-2 text-sm font-semibold hidden md:inline-block ${isCurrent || isCompleted ? 'text-gray-800' : 'text-gray-500'}`}>{step}</span>
+          </li>
+        );
+      })}
+    </ol>
+  </div>
+);
+
+
+export default function EREBUS() {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const progressSteps = ['Procesar', 'Analizar', 'Finalizado'];
 
-  // --- Refs ---
-  const mediaRecorder = useRef<MediaRecorder | null>(null);
-  const audioChunks = useRef<Blob[]>([]);
-  const audioPlayer = useRef<HTMLAudioElement | null>(null); // Inicializar como null
+  // --- ESTADOS Y REFERENCIAS PARA EL MODAL DE LA CÁMARA ---
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // --- Configuración de la API (URL Directa) ---
-  // *** CAMBIO AQUÍ: URL hardcodeada usando HTTPS ***
-  const API_ENDPOINT = 'https://erebus-production.up.railway.app'; // URL base (HTTPS!)
-  const PROCESS_ENDPOINT = `${API_ENDPOINT}/process_audio/`; // Endpoint específico
-
-  // --- Efecto para inicializar y limpiar Audio Player ---
-  useEffect(() => {
-    // Crear instancia de Audio al montar
-    audioPlayer.current = new Audio();
-
-    const player = audioPlayer.current; // Referencia local para limpieza
-
-    // Manejar fin de reproducción
-    const handleEnded = () => setIsPlayingResponse(false);
-    player.addEventListener('ended', handleEnded);
-
-    // Manejar errores de reproducción
-    const handleError = (e: Event) => {
-        console.error("Error en Audio Player:", e);
-        setError("Error al reproducir la respuesta de audio.");
-        setIsPlayingResponse(false);
-    };
-    player.addEventListener('error', handleError);
-
-    // Limpieza al desmontar
-    return () => {
-      if (player) {
-        player.removeEventListener('ended', handleEnded);
-        player.removeEventListener('error', handleError);
-        if (!player.paused) {
-          player.pause();
-        }
-        player.src = ''; // Liberar recursos
-      }
-      audioPlayer.current = null; // Limpiar ref
-    };
-  }, []); // Se ejecuta solo una vez al montar
-
-  // --- Funciones de Grabación ---
-  const startRecording = useCallback(async () => {
+  // --- LÓGICA DE MANEJO DE ESTADO Y ARCHIVOS ---
+  const resetState = () => {
     setError(null);
-    setResponseText('');
-    setIsPlayingResponse(false); // Detener reproducción si estaba sonando
-    audioPlayer.current?.pause();
-
-    // Limpiar grabación anterior
-    if (mediaRecorder.current && mediaRecorder.current.state !== "inactive") {
-        mediaRecorder.current.stop(); // Detener si estaba grabando o pausado
+    setAudioUrl(null);
+    setCurrentStep(0);
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+      setImagePreview(null);
     }
-    mediaRecorder.current = null;
-    audioChunks.current = [];
+    setSelectedFile(null);
+  };
 
+  const processAndSetFile = async (file: File) => {
+    if (!file) return;
+    resetState();
+    setIsLoading(true);
+    setCurrentStep(1);
 
-    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
-      setError("La API de grabación no es soportada por este navegador.");
-      return;
-    }
-
+    const options = { maxSizeMB: 1, maxWidthOrHeight: 1280, useWebWorker: true };
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Intentar con opciones comunes si es posible
-      const options = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? { mimeType: 'audio/webm;codecs=opus' }
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-        ? { mimeType: 'audio/ogg;codecs=opus' }
-        : {}; // Usar default del navegador si no
-
-      mediaRecorder.current = new MediaRecorder(stream, options);
-
-      mediaRecorder.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunks.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.current.onstop = () => {
-        if (audioChunks.current.length > 0) {
-          const audioBlob = new Blob(audioChunks.current, { type: mediaRecorder.current?.mimeType || 'audio/webm' });
-          sendAudioToApi(audioBlob); // Enviar al detener
-        } else {
-          console.warn("No se grabaron datos de audio.");
-          setIsLoading(false); // Terminar carga si no hay chunks
-          setError("No se detectó audio durante la grabación.");
-        }
-        // Detener tracks del stream para liberar micrófono
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.current.onerror = (event) => {
-        const specificError = (event as ErrorEvent).error; // Casting a ErrorEvent
-        console.error("Error de MediaRecorder:", specificError);
-        setError(`Error de grabación: ${specificError?.name || 'desconocido'}`);
-        setIsRecording(false);
-        setIsLoading(false);
-        stream.getTracks().forEach(track => track.stop());
-      }
-
-      mediaRecorder.current.start();
-      setIsRecording(true);
-
-    } catch (err: any) { // Capturar error de getUserMedia
-      console.error("Error al acceder al micrófono:", err);
-      let userFriendlyError = "No se pudo acceder al micrófono.";
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          userFriendlyError = "Permiso denegado para el micrófono. Revisa la configuración de tu navegador.";
-      } else if (err.name === 'NotFoundError') {
-          userFriendlyError = "No se encontró un dispositivo de micrófono.";
-      }
-      setError(userFriendlyError);
-      setIsRecording(false);
-    }
-  }, [PROCESS_ENDPOINT]); // Dependencia del endpoint
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorder.current && mediaRecorder.current.state === "recording") {
-      mediaRecorder.current.stop(); // Esto dispara onstop -> sendAudioToApi
-      setIsRecording(false);
-      setIsLoading(true); // Mostrar carga mientras se procesa
-    }
-  }, []); // Sin dependencias
-
-  // --- Función para Enviar Audio a la API ---
-  const sendAudioToApi = useCallback(async (audioBlob: Blob) => {
-    console.log("Enviando audio a:", PROCESS_ENDPOINT);
-    // No establecer isLoading aquí, ya se hizo en stopRecording
-    const formData = new FormData();
-    // Usar un nombre de archivo estándar, el backend debería manejarlo
-    formData.append('file', audioBlob, 'audio_record.wav');
-
-    try {
-      const response = await fetch(PROCESS_ENDPOINT, {
-        method: 'POST',
-        body: formData,
-        // Podrías añadir AbortController para timeouts largos si es necesario
-      });
-
-      // Manejo de errores HTTP más detallado
-      if (!response.ok) {
-        let errorDetail = `Error ${response.status}`;
-        let errorTitle = response.statusText || "Error de Red";
-        try {
-          // Intentar parsear error JSON del backend (FastAPI a menudo usa 'detail')
-          const errorJson = await response.json();
-          errorDetail = errorJson.detail || errorJson.message || errorDetail;
-        } catch (e) { /* No hacer nada si el cuerpo del error no es JSON */ }
-        throw new Error(`${errorTitle}: ${errorDetail}`);
-      }
-
-      const data = await response.json() as ApiResponse;
-      setResponseText(data.responseText || 'Respuesta recibida, pero sin texto.'); // Mensaje más claro
-
-      // Manejo de Audio de Respuesta
-      if (data.audioBase64 && audioPlayer.current) {
-        const audioSrc = `data:audio/mpeg;base64,${data.audioBase64}`;
-        audioPlayer.current.src = audioSrc;
-        // Intentar reproducir
-        audioPlayer.current.play()
-          .then(() => {
-            setIsPlayingResponse(true); // Éxito al iniciar reproducción
-          })
-          .catch(e => {
-            console.error("Error al llamar a play():", e);
-            setError("Error al iniciar audio. Haz clic en Play."); // Pedir interacción
-            setIsPlayingResponse(false); // No se está reproduciendo
-          });
-      } else {
-        console.warn("No se recibió audioBase64 en la respuesta.");
-        setIsPlayingResponse(false); // Asegurar que no está en estado de reproducción
-      }
-
-    } catch (err: any) {
-      console.error("Error en sendAudioToApi:", err);
-      setError(err.message || "Error desconocido al procesar el audio."); // Mostrar mensaje del error
-      setResponseText(''); // Limpiar texto en caso de error
-      setIsPlayingResponse(false); // Asegurar que no está en estado de reproducción
+      const compressedFile = await imageCompression(file, options);
+      setSelectedFile(compressedFile);
+      setImagePreview(URL.createObjectURL(compressedFile));
+    } catch (compressionError) {
+      setError("Error al procesar la imagen.");
+      setSelectedFile(file);
+      setImagePreview(URL.createObjectURL(file));
     } finally {
-      setIsLoading(false); // Quitar carga al final, sea éxito o error
-    }
-  }, [PROCESS_ENDPOINT]); // Dependencia correcta
-
-  // --- Manejador del Botón Principal (Grabar/Detener) ---
-  const handleRecordButtonClick = () => {
-    // Detener reproducción de respuesta si está sonando
-    if (isPlayingResponse && audioPlayer.current) {
-      audioPlayer.current.pause();
-      audioPlayer.current.currentTime = 0;
-      setIsPlayingResponse(false);
-    }
-
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
+      setIsLoading(false);
     }
   };
 
-  // --- Manejador para Botón de Reproducción/Pausa de Respuesta ---
-  const handlePlayPauseResponse = () => {
-    if (!audioPlayer.current || !audioPlayer.current.src || audioPlayer.current.src.startsWith('data:application/octet-stream')) {
-        setError("No hay audio de respuesta para reproducir.");
-        return; // No hacer nada si no hay fuente válida
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) processAndSetFile(file);
+    event.target.value = '';
+  };
+  
+  // --- LÓGICA DE LA CÁMARA ---
+  const startCamera = async () => {
+    resetState();
+    setShowCameraModal(true);
+    setCameraStream(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setCameraStream(stream);
+    } catch (err) {
+      setError("No se pudo acceder a la cámara. Asegúrate de tener permisos y estar en un sitio seguro (HTTPS).");
+      setShowCameraModal(false);
     }
+  };
+  useEffect(() => { if (cameraStream && videoRef.current) videoRef.current.srcObject = cameraStream; }, [cameraStream]);
+  const stopCamera = () => { if (cameraStream) cameraStream.getTracks().forEach(track => track.stop()); setCameraStream(null); setShowCameraModal(false); };
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    canvas.toBlob((blob) => {
+      if (blob) processAndSetFile(new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+    }, 'image/jpeg', 0.95);
+    stopCamera();
+  };
 
-    if (isPlayingResponse) {
-      audioPlayer.current.pause();
-      setIsPlayingResponse(false);
-    } else {
-      audioPlayer.current.play().catch(e => {
-        console.error("Error al llamar a play() manualmente:", e);
-        setError("No se pudo iniciar la reproducción.");
-        setIsPlayingResponse(false);
-      });
-       setIsPlayingResponse(true); // Asumir que play() tuvo éxito inicialmente
+  // --- LÓGICA DE ANÁLISIS ---
+  const handleAnalyzeClick = async () => {
+    if (!selectedFile) { setError("Por favor, toma o carga una foto primero."); return; }
+    setIsLoading(true);
+    setCurrentStep(2);
+    setAudioUrl(null);
+    setError(null);
+    const formData = new FormData();
+    formData.append('image', selectedFile);
+    try {
+      const response = await fetch('http://localhost:5000/api/analyze', { method: 'POST', body: formData });
+      if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || 'Error desconocido.'); }
+      const audioBlob = await response.blob();
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(url);
+      setCurrentStep(3);
+    } catch (err: any) {
+      setError(err.message || 'No se pudo conectar con el servidor.');
+      setCurrentStep(0);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // --- Renderizado con Clases Tailwind (Rediseño) ---
+  // --- EFECTO DE LIMPIEZA GENERAL ---
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+    };
+  }, [audioUrl, imagePreview, cameraStream]);
+
   return (
-    // Contenedor principal con mejor padding y sombra
-    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 sm:p-8 max-w-3xl mx-auto my-6 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl p-6 md:p-8 grid md:grid-cols-2 md:gap-10">
+        
+        <canvas ref={canvasRef} className="hidden"></canvas>
+        <input id="upload-input" type="file" onChange={handleFileChange} className="hidden" accept="image/*" />
 
-      {/* Cabecera */}
-      <div className="flex items-center justify-center gap-3 mb-6 text-center">
-        <BrainCircuit className="h-8 w-8 text-primary" />
-        <div>
-            <h2 className="text-2xl font-bold text-gray-800">
-            Asistente E.R.E.B.U.S.
-            </h2>
-            <p className="text-xs text-gray-500 -mt-0.5">Impulsado por Cynosure AI</p>
+        {/* --- COLUMNA DE CONTROLES (IZQUIERDA) --- */}
+        <div className="flex flex-col">
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800">EREBUS</h1>
+          <p className="mt-2 text-gray-600 mb-6">Asistente Farmacéutico IA</p>
+
+          <div className="space-y-4">
+            <button onClick={startCamera} className="w-full flex items-center justify-center px-6 py-4 text-lg font-semibold text-white bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl shadow-lg cursor-pointer transform hover:scale-105 transition-transform duration-300">
+              <CameraIcon /> Tomar Foto
+            </button>
+            <label htmlFor="upload-input" className="w-full flex items-center justify-center px-6 py-4 text-lg font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded-xl shadow-sm cursor-pointer transform hover:scale-105 transition-transform duration-300">
+              <UploadIcon /> Cargar Foto
+            </label>
+          </div>
+
+          <div className="border-t my-6"></div>
+          
+          <button onClick={handleAnalyzeClick} disabled={!selectedFile || isLoading} className="w-full flex items-center justify-center px-6 py-4 text-lg font-bold text-white bg-gradient-to-r from-teal-500 to-green-500 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500 disabled:scale-100 transform hover:scale-105 transition-transform duration-300">
+            <AnalyzeIcon /> Analizar
+          </button>
         </div>
-      </div>
 
-      {/* Controles Principales */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 my-4">
-        {/* Botón Grabar/Detener */}
-        <button
-          onClick={handleRecordButtonClick}
-          disabled={isLoading}
-          className={`
-            py-3 px-6 min-w-[180px] flex items-center justify-center gap-2.5
-            rounded-full text-base font-semibold text-white shadow-md hover:shadow-lg
-            transition-all duration-200 ease-in-out transform
-            focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white
-            disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-md disabled:scale-100
-            ${
-              isRecording
-                ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500 active:bg-red-800'
-                : 'bg-primary hover:bg-primary/90 focus:ring-primary active:bg-primary'
-            }
-            ${isLoading ? 'animate-pulse' : ''}
-            active:scale-95
-          `}
-          aria-live="polite" // Anunciar cambios (grabando/no grabando)
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="animate-spin h-5 w-5" />
-              <span>Procesando...</span>
-            </>
-          ) : isRecording ? (
-            <>
-              <Square className="h-5 w-5" />
-              <span>Detener</span>
-            </>
-          ) : (
-            <>
-              <Mic className="h-5 w-5" />
-              <span>Grabar</span>
-            </>
+        {/* --- COLUMNA DE VISUALIZACIÓN (DERECHA) --- */}
+        <div className="flex flex-col items-center justify-center mt-6 md:mt-0 p-6 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 min-h-[350px]">
+          {!selectedFile && !isLoading && !error && (
+            <div className="text-center text-slate-500">
+              <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              <p className="mt-2 font-semibold">Esperando imagen</p>
+              <p className="text-sm">Toma una foto o cárgala para comenzar.</p>
+            </div>
           )}
-        </button>
-
-         {/* Botón Reproducir/Pausar Respuesta (solo si hay audio) */}
-         {audioPlayer.current?.src && !audioPlayer.current.src.startsWith('data:application/octet-stream') && !isRecording && !isLoading && (
-             <button
-                 onClick={handlePlayPauseResponse}
-                 className={`
-                    p-3 flex items-center justify-center
-                    rounded-full text-base font-medium shadow-md hover:shadow-lg
-                    transition-all duration-200 ease-in-out transform
-                    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white
-                    ${ isPlayingResponse
-                        ? 'bg-amber-500 hover:bg-amber-600 text-white focus:ring-amber-400 active:bg-amber-700'
-                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 focus:ring-gray-400 active:bg-gray-300'
-                    }
-                    active:scale-95
-                 `}
-                 aria-label={isPlayingResponse ? 'Pausar respuesta' : 'Reproducir respuesta'}
-             >
-                {isPlayingResponse ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-             </button>
-         )}
-      </div>
-
-       {/* Indicador de Grabación (Visual) */}
-       {isRecording && (
-           <div className="flex justify-center items-center gap-2 text-red-600 mb-4 -mt-1 animate-pulse">
-               <div className="h-2 w-2 bg-red-600 rounded-full"></div>
-               <span className="text-sm font-medium">Grabando...</span>
-           </div>
-       )}
-
-
-      {/* Mensaje de Error */}
-      {error && (
-        <div
-          role="alert"
-          className="my-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm flex items-center gap-2 justify-center"
-        >
-          <AlertCircle className="h-5 w-5 flex-shrink-0" />
-          <span>{error}</span>
+          {imagePreview && (
+            <img src={imagePreview} alt="Vista previa" className="max-h-52 w-auto object-contain rounded-lg shadow-lg mb-4" />
+          )}
+          {(currentStep > 1 || audioUrl) && (
+            <div className="w-full">
+              <ProgressTracker steps={progressSteps} currentStep={currentStep} />
+            </div>
+          )}
+          {audioUrl && (
+            <div className="w-full mt-4">
+              <audio src={audioUrl} controls autoPlay className="w-full" />
+            </div>
+          )}
+          {error && <p className="mt-4 font-semibold text-red-600 animate-shake">Error: {error}</p>}
         </div>
-      )}
 
-      {/* Área de Respuesta */}
-      <div className="mt-6 w-full">
-        <label htmlFor="responseTextOutput" className="block text-sm font-medium text-gray-700 mb-1.5">
-          Respuesta de E.R.E.B.U.S.:
-        </label>
-        <textarea
-          id="responseTextOutput"
-          value={responseText}
-          readOnly
-          placeholder="La respuesta aparecerá aquí..."
-          rows={8} // Altura inicial
-          className="w-full p-3.5 text-sm bg-gray-50 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition duration-150 text-gray-800 leading-relaxed shadow-inner min-h-[150px]"
-          aria-live="polite" // Anunciar cambios en el texto
-        />
+        {/* --- MODAL DE LA CÁMARA (MODIFICADO) --- */}
+        {showCameraModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4 backdrop-blur-sm">
+             {/* --- MODIFICACIÓN: Contenedor del modal más compacto (max-w-md) --- */}
+             <div className="bg-white p-5 rounded-2xl shadow-xl max-w-md w-full mx-auto border border-gray-200">
+                 <h3 className="text-xl font-semibold text-gray-900 mb-4 text-center">Apunte al medicamento</h3>
+                 {/* --- MODIFICACIÓN: Vista previa cuadrada (aspect-square), más compacta --- */}
+                 <div className="relative w-full aspect-square bg-gray-900 rounded-xl overflow-hidden mb-5 border-2 border-gray-300">
+                     <video ref={videoRef} playsInline autoPlay muted className="absolute inset-0 w-full h-full object-cover"></video>
+                     {!cameraStream && <div className="absolute inset-0 flex items-center justify-center text-white bg-gray-800/50"><p>Iniciando cámara...</p></div>}
+                 </div>
+                 <div className="flex justify-center gap-4">
+                     <button onClick={capturePhoto} disabled={!cameraStream} className="p-4 rounded-full text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-all transform hover:scale-110"><CaptureIcon /></button>
+                     <button onClick={stopCamera} className="px-6 py-3 rounded-full text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">Cancelar</button>
+                 </div>
+             </div>
+         </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default EREBUS;
